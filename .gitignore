@@ -20,6 +20,8 @@ out
 build
 libs
 .gradle
+/.gradle-user-home-*/
+/.gradle-user-home*/
 
 # other
 eclipse

@@ -1,26 +1,3 @@
-buildscript {
-    repositories {
-        jcenter()
-        maven {
-            name = "forge"
-            url = "http://files.minecraftforge.net/maven"
-        }
-    }
-    dependencies {
-        classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
-    }
-}
-
-apply plugin: 'net.minecraftforge.gradle.forge'
-
-minecraft {
-    version = "1.12.2-14.23.5.2838"
-    runDir = "run"
-    mappings = "stable_39"
-    useDepAts = true
-    makeObfSourceJar = false
-}
-
 shadowJar {
     archiveName = "PixelmonShiny-Reforged-8.3.0-${project.version}.jar"
     dependencies{
@@ -34,23 +11,9 @@ repositories {
         name 'sponge-repo'
         url 'https://repo.spongepowered.org/maven'
     }
-    ivy {
-        url "https://download.nodecdn.net/containers"
-        layout "pattern", {
-            artifact "/[organisation]/[module]/release/[revision]/[ext]"
-        }
-    }
-
 }
 
 dependencies {
     compile project(':common')
     compile 'org.spongepowered:spongeapi:7.2.0'
-    compile 'reforged:server:8.3.0@Pixelmon-1.12.2-8.3.0-server.jar'
-}
-
-reobf {
-    shadowJar {
-        mappingType = 'SEARGE'
-    }
 }

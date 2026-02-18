@@ -1,8 +1,5 @@
 package io.github.polymeta.reforged.adapter;
 
-import com.pixelmonmod.pixelmon.Pixelmon;
-import com.pixelmonmod.pixelmon.items.ItemPixelmonSprite;
-import com.pixelmonmod.pixelmon.storage.PlayerPartyStorage;
 import io.github.polymeta.common.adapter.IPixelmonAdapter;
 import io.github.polymeta.common.modifier.ModifierContext;
 import io.github.polymeta.common.modifier.ModifierResult;
@@ -13,43 +10,57 @@ import org.spongepowered.api.item.inventory.ItemStack;
 import org.spongepowered.api.text.Text;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class ReforgedAdapter implements IPixelmonAdapter
 {
     @Override
     public List<ItemStack> getPartyAsItem(Player player, ModifierContext context)
     {
-        PlayerPartyStorage storage = Pixelmon.storageManager.getParty(player.getUniqueId());
-        return Arrays.stream(storage.getAll())
-                .map(pokemon -> {
-                    if(pokemon == null)
-                        return ItemStack.empty();
+        List<ItemStack> result = new ArrayList<>();
+        try
+        {
+            Object[] party = getPartyPokemon(player);
+            for (Object pokemon : party)
+            {
+                if(pokemon == null)
+                {
+                    result.add(ItemStack.empty());
+                    continue;
+                }
 
-                    net.minecraft.item.ItemStack photo = ItemPixelmonSprite.getPhoto(pokemon);
-                    ItemStack item = (ItemStack)(Object)photo;
-                    item.offer(Keys.DISPLAY_NAME, Text.of(pokemon.getSpecies().name));
-                    item.offer(Keys.ITEM_LORE, Arrays.asList(Text.EMPTY, Text.of(getClickLore(context))));
-                    return item;
-                }).collect(Collectors.toList());
+                Object photo = invokeStatic("com.pixelmonmod.pixelmon.items.ItemPixelmonSprite", "getPhoto", new Class<?>[]{pokemon.getClass()}, pokemon);
+                ItemStack item = (ItemStack)(Object)photo;
+                Object species = tryInvoke(pokemon, "getSpecies");
+                String speciesName = species == null ? "Pokemon" : String.valueOf(getFieldValue(species, "name"));
+                item.offer(Keys.DISPLAY_NAME, Text.of(speciesName));
+                item.offer(Keys.ITEM_LORE, Arrays.asList(Text.EMPTY, Text.of(getClickLore(context))));
+                result.add(item);
+            }
+        }
+        catch (Exception e)
+        {
+            for (int i = 0; i < 6; i++) result.add(ItemStack.empty());
+        }
+        while (result.size() < 6) result.add(ItemStack.empty());
+        return result;
     }
 
     @Override
     public ModifierResult applyModifier(Player player, int partySlot, ModifierContext context)
     {
-        PlayerPartyStorage storage = Pixelmon.storageManager.getParty(player.getUniqueId());
-        Object pokemon = storage.getAll()[partySlot];
-        if(pokemon == null)
-            return ModifierResult.fail("Esse slot esta vazio.");
-
         try
         {
+            Object[] party = getPartyPokemon(player);
+            Object pokemon = party[partySlot];
+            if(pokemon == null)
+                return ModifierResult.fail("Esse slot esta vazio.");
+
             if(context.getType() == ModifierType.SHINY)
             {
-                Method isShiny = pokemon.getClass().getMethod("isShiny");
-                boolean shiny = (boolean) isShiny.invoke(pokemon);
+                boolean shiny = (boolean) pokemon.getClass().getMethod("isShiny").invoke(pokemon);
                 pokemon.getClass().getMethod("setShiny", boolean.class).invoke(pokemon, !shiny);
                 return ModifierResult.success("Shiny alterado com sucesso.");
             }
@@ -95,21 +106,44 @@ public class ReforgedAdapter implements IPixelmonAdapter
         {
             return ModifierResult.fail("Falha ao aplicar modificador: " + e.getClass().getSimpleName());
         }
-
         return ModifierResult.fail("Modificador desconhecido.");
+    }
+
+    private Object[] getPartyPokemon(Player player) throws Exception
+    {
+        Class<?> pixelmonClass = Class.forName("com.pixelmonmod.pixelmon.Pixelmon");
+        Object storageManager = pixelmonClass.getField("storageManager").get(null);
+        Method getParty = storageManager.getClass().getMethod("getParty", java.util.UUID.class);
+        Object storage = getParty.invoke(storageManager, player.getUniqueId());
+        Object all = storage.getClass().getMethod("getAll").invoke(storage);
+        return (Object[]) all;
     }
 
     private String getClickLore(ModifierContext context)
     {
-        if(context.getType() == ModifierType.SIZE)
-            return "Clique para aplicar tamanho: " + context.getSelectedValue();
-        if(context.getType() == ModifierType.NATURE)
-            return "Clique para aplicar nature: " + context.getSelectedValue();
-        if(context.getType() == ModifierType.IV_REROLL)
-            return "Clique para rerrolar IVs";
-        if(context.getType() == ModifierType.GENDER_SWAP)
-            return "Clique para trocar para genero oposto";
+        if(context.getType() == ModifierType.SIZE) return "Clique para aplicar tamanho: " + context.getSelectedValue();
+        if(context.getType() == ModifierType.NATURE) return "Clique para aplicar nature: " + context.getSelectedValue();
+        if(context.getType() == ModifierType.IV_REROLL) return "Clique para rerrolar IVs";
+        if(context.getType() == ModifierType.GENDER_SWAP) return "Clique para trocar para genero oposto";
         return "Clique para alternar shiny";
+    }
+
+    private Object invokeStatic(String className, String method, Class<?>[] paramTypes, Object arg) throws Exception
+    {
+        Class<?> clazz = Class.forName(className);
+        return clazz.getMethod(method, paramTypes).invoke(null, arg);
+    }
+
+    private Object getFieldValue(Object instance, String fieldName)
+    {
+        try
+        {
+            return instance.getClass().getField(fieldName).get(instance);
+        }
+        catch (Exception ignored)
+        {
+            return null;
+        }
     }
 
     private boolean setWithEnum(Object target, String methodName, String value) throws Exception
@@ -127,8 +161,7 @@ public class ReforgedAdapter implements IPixelmonAdapter
     private Object matchEnum(Class<?> enumClass, String value)
     {
         Object[] constants = enumClass.getEnumConstants();
-        if(constants == null)
-            return null;
+        if(constants == null) return null;
         for (Object constant : constants)
         {
             if(((Enum<?>) constant).name().equalsIgnoreCase(value))
@@ -184,24 +217,19 @@ public class ReforgedAdapter implements IPixelmonAdapter
     {
         Class<?> genderClass = currentGender.getClass();
         Object[] constants = genderClass.getEnumConstants();
-        if(constants == null || constants.length == 0)
-            return null;
+        if(constants == null || constants.length == 0) return null;
 
         String current = ((Enum<?>) currentGender).name().toLowerCase();
-        if(current.contains("male"))
-            return getEnumByName(genderClass, "FEMALE");
-        if(current.contains("female"))
-            return getEnumByName(genderClass, "MALE");
-        if(current.contains("none") || current.contains("genderless"))
-            return null;
+        if(current.contains("male")) return getEnumByName(genderClass, "FEMALE");
+        if(current.contains("female")) return getEnumByName(genderClass, "MALE");
+        if(current.contains("none") || current.contains("genderless")) return null;
         return null;
     }
 
     private Object getEnumByName(Class<?> enumClass, String name)
     {
         Object[] constants = enumClass.getEnumConstants();
-        if(constants == null)
-            return null;
+        if(constants == null) return null;
         for (Object constant : constants)
         {
             if(((Enum<?>) constant).name().equalsIgnoreCase(name))
