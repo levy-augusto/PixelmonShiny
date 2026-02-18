@@ -2,10 +2,12 @@ package io.github.polymeta.reforged;
 
 import com.google.inject.Inject;
 import io.github.polymeta.common.GUI.PartyGUI;
+import io.github.polymeta.common.GUI.SelectionGUI;
 import io.github.polymeta.common.command.GiveItemCMD;
 import io.github.polymeta.common.config.GeneralConfig;
 import io.github.polymeta.common.config.GeneralConfigManager;
 import io.github.polymeta.common.listener.SpongeListener;
+import io.github.polymeta.common.modifier.ModifierType;
 import io.github.polymeta.reforged.adapter.ReforgedAdapter;
 import ninja.leaping.configurate.commented.CommentedConfigurationNode;
 import ninja.leaping.configurate.loader.ConfigurationLoader;
@@ -46,17 +48,30 @@ public class PixelShinyReforged
             logger.error("FAILED TO LOAD CONFIG");
 
         PartyGUI.initGUI(this, configManager, new ReforgedAdapter());
+        SelectionGUI.initSelectionGUI(this, configManager);
 
         CommandSpec giveItem = CommandSpec.builder()
                 .description(Text.of("Give a Shiny item to a player!"))
                 .permission("pixelmonshiny.give")
-                .executor(new GiveItemCMD(configManager))
+                .executor(new GiveItemCMD(configManager, ModifierType.SHINY))
                 .arguments(
                         GenericArguments.onlyOne(GenericArguments.playerOrSource(Text.of("player"))),
                         GenericArguments.optionalWeak(GenericArguments.integer(Text.of("amount")))
                 )
                 .build();
+
+        CommandSpec giveModifierItem = CommandSpec.builder()
+                .description(Text.of("Give a modifier item to a player"))
+                .permission("pixelmonshiny.give")
+                .executor(new GiveItemCMD(configManager))
+                .arguments(
+                        GenericArguments.onlyOne(GenericArguments.string(Text.of("type"))),
+                        GenericArguments.onlyOne(GenericArguments.playerOrSource(Text.of("player"))),
+                        GenericArguments.optionalWeak(GenericArguments.integer(Text.of("amount")))
+                )
+                .build();
         Sponge.getCommandManager().register(this, giveItem, "giveshinyitem", "gsi");
+        Sponge.getCommandManager().register(this, giveModifierItem, "givepixelitem", "gpi");
 
         logger.info("PixelShiny by Polymeta, ready!");
     }

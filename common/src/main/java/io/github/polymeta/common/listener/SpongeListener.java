@@ -1,18 +1,14 @@
 package io.github.polymeta.common.listener;
 
 import io.github.polymeta.common.GUI.PartyGUI;
+import io.github.polymeta.common.GUI.SelectionGUI;
 import io.github.polymeta.common.config.GeneralConfigManager;
-import org.spongepowered.api.data.key.Keys;
 import org.spongepowered.api.data.type.HandTypes;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.block.ChangeBlockEvent;
 import org.spongepowered.api.event.block.InteractBlockEvent;
 import org.spongepowered.api.event.filter.cause.Root;
-import org.spongepowered.api.text.Text;
-import org.spongepowered.api.text.serializer.TextSerializers;
-
-import java.util.List;
 
 public class SpongeListener
 {
@@ -27,66 +23,35 @@ public class SpongeListener
     public void onRightClick(InteractBlockEvent.Secondary event, @Root Player player)
     {
         player.getItemInHand(HandTypes.MAIN_HAND).ifPresent(itemStack ->
-        {
-            if(itemStack.getType().equals(cManager.getShinyItem().getType()))
-            {
-                itemStack.get(Keys.DISPLAY_NAME).ifPresent(text -> {
-                    if(TextSerializers.FORMATTING_CODE.serialize(text).equalsIgnoreCase(cManager.getConfig().itemName))
-                    {
-                        itemStack.get(Keys.ITEM_LORE).ifPresent(lore -> {
-                            if(this.isLoreSame(lore, cManager.getConfig().itemLore))
-                            {
-                                //type, name and lore match, so now we open GUI!
-                                new PartyGUI(player).OpenInventoryOnPlayer();
-                                event.setCancelled(true);
-                            }
-                        });
-                    }
-                });
-            }
-        });
+                this.tryOpenInventory(player, itemStack, event));
     }
 
     @Listener
     public void onPlace(ChangeBlockEvent.Place event, @Root Player player)
     {
         player.getItemInHand(HandTypes.MAIN_HAND).ifPresent(itemStack ->
-        {
-            if(itemStack.getType().equals(cManager.getShinyItem().getType()))
-            {
-                itemStack.get(Keys.DISPLAY_NAME).ifPresent(text -> {
-                    if(TextSerializers.FORMATTING_CODE.serialize(text).equalsIgnoreCase(cManager.getConfig().itemName))
-                    {
-                        itemStack.get(Keys.ITEM_LORE).ifPresent(lore -> {
-                            if(this.isLoreSame(lore, cManager.getConfig().itemLore))
-                            {
-                                //type, name and lore match, so now we open GUI!
-                                new PartyGUI(player).OpenInventoryOnPlayer();
-                                event.setCancelled(true);
-                            }
-                        });
-                    }
-                });
-            }
-        });
+                this.tryOpenInventory(player, itemStack, event));
     }
 
-    private boolean isLoreSame(List<Text> lore1, List<String> lore2)
+    private void tryOpenInventory(Player player, org.spongepowered.api.item.inventory.ItemStack itemStack, org.spongepowered.api.event.Event event)
     {
-        if (lore1.size() == lore2.size())
-        {
-            for (int i = 0; i < lore1.size(); i++)
+        cManager.identifyModifierType(itemStack).ifPresent(type -> {
+            if(type.requiresOption())
             {
-                if (!TextSerializers.FORMATTING_CODE.serialize(lore1.get(i)).equalsIgnoreCase(lore2.get(i)))
-                {
-                    return false;
-                }
+                new SelectionGUI(player, type).openInventoryOnPlayer();
             }
-        }
-        else
-        {
-            return false;
-        }
-        return true;
+            else
+            {
+                new PartyGUI(player, type, null).openInventoryOnPlayer();
+            }
+            if(event instanceof InteractBlockEvent.Secondary)
+            {
+                ((InteractBlockEvent.Secondary) event).setCancelled(true);
+            }
+            if(event instanceof ChangeBlockEvent.Place)
+            {
+                ((ChangeBlockEvent.Place) event).setCancelled(true);
+            }
+        });
     }
 }
